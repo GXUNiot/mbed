@@ -1,70 +1,90 @@
 #include "OneNET.h"
 
-OneNET::OneNET(char* devid, char* apikey)
+OneNET::OneNET(const char* devid, const char* apikey)
 {
   strcpy(_devid,devid);
   strcpy(_apikey,apikey);
+
+	_esp8266 = NULL;
 }
 
 OneNET::~OneNET()
 {
+	_esp8266 = NULL;
 }
 
-bool OneNET::DevLink(ESP8266 *esp8266, ONENET_PROTOCOL type)
+bool OneNET::DevLink(ESP01 *esp8266, ONENET_PROTOCOL type)
 {
-  _esp8266 = esp8266; 
-  _protocol = type;
+	if( esp8266 != NULL )
+	{
+		_esp8266 = esp8266; 
+  	_protocol = type;
+	}
+	else if( _esp8266 == NULL )
+		return false;
+  
 
-  	
 	EDP_PACKET_STRUCTURE edpPacket = {NULL, 0, 0, 0};				//协议包
 
-	unsigned char *dataPtr;
 	
-	unsigned char status = 1;
+	bool status = true;
 	
-	DEBUG.printf("OneNet_DevLink DEVID: %s,     APIKEY: %s\r\n", _devid, _apikey);
+	//DEBUGLog("OneNet_DevLink DEVID: %s,     APIKEY: %s\r\n", _devid, _apikey);
 
 	if(EDP_PacketConnect1(_devid, _apikey, 256, &edpPacket) == 0)		//根据devid 和 apikey封装协议包
 	{
 		Send(edpPacket._data, edpPacket._len);			//上传平台
 		
-		dataPtr = (*_esp8266).GetIPD(250);								//等待平台响应
-		if(dataPtr != NULL)
+		uint8_t dataPtr[128];
+
+		if((*_esp8266).GetIPD(dataPtr,128,250))
 		{
 			if(EDP_UnPacketRecv(dataPtr) == CONNRESP)
 			{
 				switch(EDP_UnPacketConnectRsp(dataPtr))
 				{
-					case 0:DEBUG.printf("Tips:	连接成功\r\n");status = 0;break;
+					case 0://DEBUGLog("Tips:	连接成功\r\n");
+						status = false;
+						break;
 					
-					case 1:DEBUG.printf("WARN:	连接失败：协议错误\r\n");break;
-					case 2:DEBUG.printf("WARN:	连接失败：设备ID鉴权失败\r\n");break;
-					case 3:DEBUG.printf("WARN:	连接失败：服务器失败\r\n");break;
-					case 4:DEBUG.printf("WARN:	连接失败：用户ID鉴权失败\r\n");break;
-					case 5:DEBUG.printf("WARN:	连接失败：未授权\r\n");break;
-					case 6:DEBUG.printf("WARN:	连接失败：授权码无效\r\n");break;
-					case 7:DEBUG.printf("WARN:	连接失败：激活码未分配\r\n");break;
-					case 8:DEBUG.printf("WARN:	连接失败：该设备已被激活\r\n");break;
-					case 9:DEBUG.printf("WARN:	连接失败：重复发送连接请求包\r\n");break;
-					
-					default:DEBUG.printf("ERR:	连接失败：未知错误\r\n");break;
+					case 1://DEBUGLog("WARN:	连接失败：协议错误\r\n");
+					break;
+					case 2://DEBUGLog("WARN:	连接失败：设备ID鉴权失败\r\n");
+					break;
+					case 3://DEBUGLog("WARN:	连接失败：服务器失败\r\n");
+					break;
+					case 4://DEBUGLog("WARN:	连接失败：用户ID鉴权失败\r\n");
+					break;
+					case 5://DEBUGLog("WARN:	连接失败：未授权\r\n");
+					break;
+					case 6://DEBUGLog("WARN:	连接失败：授权码无效\r\n");
+					break;
+					case 7://DEBUGLog("WARN:	连接失败：激活码未分配\r\n");
+					break;
+					case 8://DEBUGLog("WARN:	连接失败：该设备已被激活\r\n");
+					break;
+					case 9://DEBUGLog("WARN:	连接失败：重复发送连接请求包\r\n");
+					break;
+					default://DEBUGLog("ERR:	连接失败：未知错误\r\n");
+					break;
 				}
 			}
 		}
 		
 		EDP_DeleteBuffer(&edpPacket);								//删包
-    (*_esp8266).Clear();
+
 	}
 	else
-		DEBUG.printf("WARN:	EDP_PacketConnect Failed\r\n");
-	
+	{
+		//DEBUGLog("WARN:	EDP_PacketConnect Failed\r\n");
+	}
+		
 	return status;
-
 }
 
 bool OneNET::Send(uint8_t* data)
 {
-  char cmd_buf[40];
+  char cmd_buf[20];
   uint16_t len = sizeof(data);
 
   sprintf(cmd_buf, "AT+CIPSEND=%d\r\n", len);		//发送命令
@@ -78,20 +98,42 @@ bool OneNET::Send(uint8_t* data)
 
 bool OneNET::Send(uint8_t* data, uint16_t len)
 {
-  char cmd_buf[40];
+  char cmd_buf[20];
 
   sprintf(cmd_buf, "AT+CIPSEND=%d\r\n", len);		//发送命令
-  if( (*_esp8266).SendCmd(cmd_buf, ">") )
+  if( (*_esp8266).SendCmd(cmd_buf, ">",10) )
   {
     (*_esp8266).Send(data,len);
     return true;
   }
+	else if( (*_esp8266).SendCmd(cmd_buf, "ERROR") )
+	{
+		if( !(*_esp8266).ConnectIP() )
+    	printf("WiFi Connect Server Fail\r\n");
+		else
+			DevLink(NULL,EDP);
+	}
   return false;
 }
 
-bool OneNET::PushData(const char* dst_devid, const char* data)
+bool OneNET::PushData(const char* dst_devid, const char* data, uint8_t len)
 {
-	return false;
+	
+	EDP_PACKET_STRUCTURE edpPacket = {NULL, 0, 0, 0};
+
+//---------------------------------------------步骤一：组包---------------------------------------------
+	if(EDP_PacketPushData(dst_devid, data, len, &edpPacket) == 0)
+	{
+//---------------------------------------------步骤二：发送数据-----------------------------------------
+		Send(edpPacket._data, edpPacket._len);
+		
+//---------------------------------------------步骤三：删包---------------------------------------------
+		EDP_DeleteBuffer(&edpPacket);
+	}
+	else
+		return false;
+		
+	return true;
 }
 
 bool OneNET::SendData(DATA_STREAM *streamArray, uint8_t streamArrayCnt)
@@ -112,7 +154,7 @@ bool OneNET::SendData(DATA_STREAM *streamArray, uint8_t streamArrayCnt)
     if(type < 1 && type > 5)
       return false;
     
-    //DEBUG.printf("Tips:	OneNet_SendData-EDP_TYPE%d\r\n", type);
+    ////DEBUGLog("Tips:	OneNet_SendData-EDP_TYPE%d\r\n", type);
     
     if(type != kTypeBin)
     {
@@ -132,20 +174,26 @@ bool OneNET::SendData(DATA_STREAM *streamArray, uint8_t streamArrayCnt)
             edpPacket._len += body_len;
   //---------------------------------------------步骤四：发送数据---------------------------------------------------
             Send(edpPacket._data, edpPacket._len);
-            //DEBUG.printf("Send %d Bytes\r\n", edpPacket._len);
+            ////DEBUGLog("Send %d Bytes\r\n", edpPacket._len);
           }
           else
-            DEBUG.printf("WARN:	DSTREAM_GetDataStream_Body Failed\r\n");
-          
+					{
+						//DEBUGLog("WARN:	DSTREAM_GetDataStream_Body Failed\r\n");
+					}
+            
   //---------------------------------------------步骤五：删包-------------------------------------------------------
           EDP_DeleteBuffer(&edpPacket);
           return true;
         }
         else
-          DEBUG.printf("WARN:	EDP_NewBuffer Failed\r\n");
+				{	
+					//DEBUGLog("WARN:	EDP_NewBuffer Failed\r\n");
+				}
       }
       else
-        DEBUG.printf("WARN:	DataStream Len Zero\r\n");
+			{
+				//DEBUGLog("WARN:	DataStream Len Zero\r\n");
+			}
     }
     else
     {
@@ -190,6 +238,15 @@ void OneNET::RevPro(unsigned char *cmd,char* order, int* value)
 	type = EDP_UnPacketRecv(cmd);
 	switch(type)										//判断是pushdata还是命令下发
 	{
+		case PUSHDATA:									//解pushdata包
+			
+			result = EDP_UnPacketPushData(cmd, &cmdid_devid, &req, &req_len);
+			/*
+			if(result == 0)
+				printf("src_devid: %s, req: %s, req_len: %d\r\n", cmdid_devid, req, req_len);
+			*/
+		break;
+
 		case CMDREQ:									//解命令包
 			
 			result = EDP_UnPacketCmd(cmd, &cmdid_devid, &cmdid_len, &req, &req_len);
@@ -197,7 +254,7 @@ void OneNET::RevPro(unsigned char *cmd,char* order, int* value)
 			if(result == 0)								//解包成功，则进行命令回复的组包
 			{
 				EDP_PacketCmdResp(cmdid_devid, cmdid_len, req, req_len, &edpPacket);
-				//DEBUG.printf("cmdid: %s, req: %s, req_len: %d\r\n", cmdid_devid, req, req_len);
+				////DEBUGLog("cmdid: %s, req: %s, req_len: %d\r\n", cmdid_devid, req, req_len);
 			}
 			
 		break;
@@ -206,10 +263,10 @@ void OneNET::RevPro(unsigned char *cmd,char* order, int* value)
 			
 			if(cmd[3] == MSG_ID_HIGH && cmd[4] == MSG_ID_LOW)
 			{
-				DEBUG.printf("Tips:	Send %s\r\n", cmd[5] ? "Err" : "Ok");
+				//DEBUGLog("Tips:	Send %s\r\n", cmd[5] ? "Err" : "Ok");
 			}
 			else
-				DEBUG.printf("Tips:	Message ID Err\r\n");
+				//DEBUGLog("Tips:	Message ID Err\r\n");
 			
 		break;
 			
@@ -218,8 +275,9 @@ void OneNET::RevPro(unsigned char *cmd,char* order, int* value)
 		break;
 	}
 	
-	//ESP8266_Clear();									//清空缓存
-	(*_esp8266).Clear();
+	//ESP01_Clear();									//清空缓存
+	//(*_esp8266).Clear();
+
 
 	if(result == -1)
 		return;
@@ -242,8 +300,13 @@ void OneNET::RevPro(unsigned char *cmd,char* order, int* value)
     strncat(order,req,pos);
     *value = num;
 	}
-	
-	if(type == CMDREQ && result == 0)						//如果是命令包 且 解包成功
+
+	if(type == PUSHDATA && result == 0)				//如果是pushdata 且 解包成功
+	{
+		EDP_FreeBuffer(cmdid_devid);					//释放内存
+		EDP_FreeBuffer(req);
+	}
+	else if(type == CMDREQ && result == 0)						//如果是命令包 且 解包成功
 	{
 		EDP_FreeBuffer(cmdid_devid);						//释放内存
 		EDP_FreeBuffer(req);

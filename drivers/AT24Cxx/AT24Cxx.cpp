@@ -39,7 +39,6 @@ AT24CXX::AT24CXX(I2C *i2c, uint16_t size, uint8_t hardaddr, uint32_t feq)
 
   _hardAddr = (hardaddr & 0x7)<<1;
 
-  _i2c = NULL;
 }
 
 AT24CXX::~AT24CXX()

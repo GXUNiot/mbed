@@ -1,3 +1,4 @@
+/*
 #include <mbed.h>
 #include "LedBlink.h"
 #include "AT24Cxx.h"
@@ -112,3 +113,4 @@ int main() {
     // put your main code here, to run repeatedly:
   }
 }
+*/

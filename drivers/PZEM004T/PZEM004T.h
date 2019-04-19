@@ -32,28 +32,6 @@
  *	4.电流：测试量程0~100A
  *         显示格式00.00~99.99。
  *		   
- * Example:
- * @code
- *	#include "CNiot.h"
- *
- *	//使用 PC_13 脚连接到LED
- *	LedBlink blink(PC_13);
- *
- *	PZEM004T pzem004t(PB_10,PB_11);
- *
- *	int main() {    
- *		
- *		
- *			printf("System is ready\r\n");
- *		while(1) {		
- *				
- *
- *				printf("V:%0.1fv  I:%0.2fA  P:%dW  E:%dWh\r\n",(float)pzem004t.getVoltage()/10,(float)pzem004t.getCurrent()/100,pzem004t.getActivepower(),pzem004t.getElectricity());
- *				wait(1);
- *				
- *			}
- *	}
- *
  * @endcode
  */
 
@@ -94,8 +72,6 @@ private:
 	void serial_IRQHandler();
 	
 };
-
-//static unsigned char PZEM004T::_cmd[4][7] = {{0xB0,0xC0,0xA8,0x01,0x01,0x11,0x1A},{0xB1,0xC0,0xA8,0x01,0x01,0x11,0x1B},{0xB2,0xC0,0xA8,0x01,0x01,0x11,0x1C},{0xB3,0xC0,0xA8,0x01,0x01,0x11,0x1D}};
 
 
 #endif //_PZEM004T_H

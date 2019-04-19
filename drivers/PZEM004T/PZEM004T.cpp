@@ -11,7 +11,7 @@ PZEM004T::PZEM004T(PinName tx,PinName rx) : _serial(tx, rx)
 
 int PZEM004T::readable(void)
 {
-	for(int i=0; i<sizeof(_buf); i++)
+	for(uint8_t i=0; i<sizeof(_buf); i++)
 	{
 		switch(_buf[i])
 		{

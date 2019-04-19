@@ -1,5 +1,5 @@
 /*****************************************
- * 文件名：   ESP8266.h
+ * 文件名：   ESP01.h
  * 
  * 说明：    
  * 
@@ -8,19 +8,15 @@
  * 修改时间：  2019-02-23
  *****************************************/
 
-#ifndef _ESP8266_H
-#define _ESP8266_H
+#ifndef _ESP01_H
+#define _ESP01_H
 
 /***************** 库 *****************/
 #include <mbed.h>
 #include "typedef.h"
 
 /***************** 测试 *****************/
-#ifdef TEST
 
-extern Serial DEBUG;
-
-#endif
 
 /***************** 定义 *****************/
 
@@ -32,12 +28,14 @@ extern Serial DEBUG;
 
 
 /***************** 类 *****************/
-class ESP8266
+class ESP01
 {
 
 public:
 
-  ESP8266(PinName rx, PinName tx, PinName rst=NC);
+  ESP01(PinName rx, PinName tx, PinName rst=NC);
+
+  ~ESP01();
 
   void Send(uint8_t *buf);
 
@@ -49,6 +47,7 @@ public:
 
   uint8_t ConnectAP(const char *ssid, const char *pawd);
 
+  bool ConnectIP(void);
   bool ConnectIP(const char* protocol, const char* IP, const char* port);
 
   void Reset(void);
@@ -59,22 +58,29 @@ public:
 
   void Clear(void);
 
-  unsigned char *GetIPD(unsigned short timeOut);
+  bool GetIPD(uint8_t *data, uint16_t len, uint16_t timeOut=1000);
+
+  void attachTrigger(const uint8_t *Keyword, void (*fun)(void));
+  void detachTrigger(void);
 
 private:
 
   Serial Uart;
   DigitalOut Rst;
 
-  enum ESP8266_RESET_MODE{Soft=0,Hard};
-  ESP8266_RESET_MODE ResetMode;
+  enum ESP01_RESET_MODE{Soft=0,Hard};
+  ESP01_RESET_MODE ResetMode;
 
   uint8_t RecBuf[REC_BUF_MAXLEN];
   uint16_t RecCnt,RecCntPre;
 
+  uint8_t *_keyword;
+  void (*ExternalResponse)(void);
+
+  char _protocol[4],_ip[17],_port[6];
 
   void UartIRQ(void);
 };
 
 
-#endif //_ESP8266_H
+#endif //_ESP01_H
